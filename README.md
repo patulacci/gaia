@@ -143,10 +143,11 @@ gaia/
    docker build -t pdf-parser-service .
    
    # Run container
-   docker run -d -p 8001:8000 \
-     -e PDF_PARSER_API_KEY="your-api-key" \
-     -e PDF_PARSER_API_URL="http://localhost:8000" \
-     pdf-parser-service
+   docker run -d \
+      -p 8001:8000 \
+      -e PDF_PARSER_API_KEY="your-api-key" \
+      -e PDF_PARSER_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173" \
+      pdf-parser-service
    ```
 
 ## 🚀 Deployment
@@ -166,7 +167,7 @@ gaia/
    npx supabase secrets set \
      OPENAI_API_KEY=your-openai-api-key \
      PDF_PARSER_API_URL=your-pdf-parser-service-url \
-     PDF_PARSER_ALLOWED_ORIGINS=your-allowed-origins
+     PDF_PARSER_API_KEY=your-api-key
    ```
 
 2. **Deploy PDF Parser Service**

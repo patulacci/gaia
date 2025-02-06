@@ -20,7 +20,7 @@ EXPOSE 8000
 
 # Set environment variables
 ENV PDF_PARSER_API_KEY=${PDF_PARSER_API_KEY}
-ENV PDF_PARSER_API_URL=${PDF_PARSER_API_URL}
+ENV PDF_PARSER_ALLOWED_ORIGINS=${PDF_PARSER_ALLOWED_ORIGINS}
 
 # Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -22,7 +22,7 @@ A FastAPI-based microservice that extracts and processes text content from PDF f
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `PDF_PARSER_API_KEY` | Authentication key for API access. This is a security measure to protect your API endpoints. Generate ONE secure key to use across all environments (local and production). | Yes | None |
-| `PDF_PARSER_API_URL` | The URL where the PDF parser service is accessible | Yes | None |
+| `PDF_PARSER_ALLOWED_ORIGINS` | Comma-separated list of allowed origins for CORS. Use "*" to allow all origins (not recommended for production). | No | "*" |
 
 ### Environment Setup Guide
 
@@ -38,13 +38,13 @@ A FastAPI-based microservice that extracts and processes text content from PDF f
    For local development:
    ```bash
    export PDF_PARSER_API_KEY="your-generated-api-key"
-   export PDF_PARSER_API_URL="http://localhost:8000"
+   export PDF_PARSER_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173"
    ```
 
    For production:
    ```bash
    export PDF_PARSER_API_KEY="same-generated-api-key"
-   export PDF_PARSER_API_URL="https://your-production-domain.com"
+   export PDF_PARSER_ALLOWED_ORIGINS="https://your-production-domain.com"
    ```
 
 ## Development Setup
@@ -82,7 +82,7 @@ docker build -t pdf-parser-service .
 docker run -d \
   -p 8001:8000 \
   -e PDF_PARSER_API_KEY="your-api-key" \
-  -e PDF_PARSER_API_URL="http://localhost:8000" \
+  -e PDF_PARSER_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173" \
   pdf-parser-service
 ```
 

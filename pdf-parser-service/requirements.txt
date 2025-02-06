@@ -2,3 +2,6 @@ fastapi==0.109.0
 uvicorn==0.27.0
 python-multipart==0.0.6
 pdfminer.six==20231228
+langchain==0.1.0  # Needed for optimized text splitting
+tiktoken==0.5.2  # Optional: For OpenAI-compatible token counting (if using embeddings)
+
