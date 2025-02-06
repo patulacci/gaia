@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../_lib/database.ts';
 import { processMarkdown } from '../_lib/markdown-parser.ts';
+import { processPDF } from '../_lib/pdf-parser.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
@@ -43,15 +44,36 @@ Deno.serve(async (req) => {
 
   const { document_id } = await req.json();
 
-  const { data: document } = await supabase
+  type DocumentWithPath = Database['public']['Views']['documents_with_storage_path']['Row'];
+  const { data: document, error: docError } = await supabase
     .from('documents_with_storage_path')
-    .select()
+    .select('*')
     .eq('id', document_id)
-    .single();
+    .single() as { data: DocumentWithPath | null; error: null } | { data: null; error: any };
 
-  if (!document?.storage_object_path) {
+  if (docError) {
     return new Response(
-      JSON.stringify({ error: 'Failed to find uploaded document' }),
+      JSON.stringify({ error: 'Failed to find document' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  if (!document) {
+    return new Response(
+      JSON.stringify({ error: 'Document not found' }),
+      {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  if (!document.storage_object_path || !document.name) {
+    return new Response(
+      JSON.stringify({ error: 'Failed to find uploaded document or document name' }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -73,11 +95,33 @@ Deno.serve(async (req) => {
     );
   }
 
-  const fileContents = await file.text();
-  const processedMd = processMarkdown(fileContents);
+  // Détecter le type de fichier
+  const isMarkdown = document.name.toLowerCase().endsWith('.md');
+  const isPDF = document.name.toLowerCase().endsWith('.pdf');
+
+  if (!isMarkdown && !isPDF) {
+    return new Response(
+      JSON.stringify({ error: 'Unsupported file type. Only .md and .pdf files are supported.' }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  let sections;
+  if (isMarkdown) {
+    const fileContents = await file.text();
+    const processedMd = processMarkdown(fileContents);
+    sections = processedMd.sections;
+  } else {
+    const arrayBuffer = await file.arrayBuffer();
+    const processedPdf = await processPDF(arrayBuffer);
+    sections = processedPdf.sections;
+  }
 
   const { error } = await supabase.from('document_sections').insert(
-    processedMd.sections.map(({ content }) => ({
+    sections.map(({ content }) => ({
       document_id,
       content,
     }))
@@ -95,7 +139,7 @@ Deno.serve(async (req) => {
   }
 
   console.log(
-    `Saved ${processedMd.sections.length} sections for file '${document.name}'`
+    `Successfully processed and saved ${sections.length} sections from '${document.name}'`
   );
 
   return new Response(null, {

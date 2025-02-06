@@ -60,31 +60,28 @@ Deno.serve(async (req) => {
 
   const { messages, embedding } = await req.json();
 
-  const { data: documents, error: matchError } = await supabase
-    .rpc('match_document_sections', {
-      embedding,
-      match_threshold: 0.8,
-    })
-    .select('content')
-    .limit(5);
+  try {
+    // Type-safe database query
+    const { data, error: matchError } = await supabase
+      .rpc('match_document_sections', {
+        embedding,
+        match_threshold: 0.8,
+      })
+      .select<'content', { content: string }>('content')
+      .limit(3) // Reduced from 5 to lower response time
+      .abortSignal(AbortSignal.timeout(10000)); // 10 second timeout for DB query
 
-  if (matchError) {
-    console.error(matchError);
+    if (matchError) {
+      console.error(matchError);
+      throw new Error('Database query error');
+    }
 
-    return new Response(
-      JSON.stringify({
-        error: 'There was an error reading your documents, please try again.',
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-  }
+    if (!data) {
+      throw new Error('No documents returned');
+    }
 
-  const injectedDocs =
-    documents && documents.length > 0
-      ? documents.map(({ content }) => content).join('\n\n')
+    const injectedDocs = data.length > 0
+      ? data.map(doc => doc.content).join('\n\n')
       : 'No documents found';
 
   console.log(injectedDocs);
@@ -115,14 +112,48 @@ Deno.serve(async (req) => {
       ...messages,
     ];
 
-  const completionStream = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo-0125',
-    messages: completionMessages,
-    max_tokens: 1024,
-    temperature: 0,
-    stream: true,
-  });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-  const stream = OpenAIStream(completionStream);
-  return new StreamingTextResponse(stream, { headers: corsHeaders });
+    const completionStream = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo-0125',
+      messages: completionMessages,
+      max_tokens: 512, // Reduced from 1024 to lower response time
+      temperature: 0,
+      stream: true,
+    }, { signal: controller.signal });
+
+    clearTimeout(timeoutId);
+    
+    const stream = OpenAIStream(completionStream);
+    return new StreamingTextResponse(stream, { headers: corsHeaders });
+  } catch (error: unknown) {
+    console.error('Error in chat function:', error);
+    
+    // Check if the error is due to timeout/cancellation
+    if (
+      error instanceof Error && 
+      (error.name === 'AbortError' || error.message?.includes('cancelled'))
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: 'The request took too long to process. Please try again with a shorter question.',
+        }),
+        {
+          status: 408,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        error: 'An error occurred while processing your request. Please try again.',
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
 });
